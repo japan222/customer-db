@@ -9,12 +9,9 @@ st.set_page_config(page_title="Account Performance Tracker", layout="wide")
 # --- ฟังก์ชันดึงข้อมูลจากหลายชีตย่อย ---
 def load_multiple_sheets(file_name, start_date, end_date):
     try:
-        # ดึงค่าจากช่อง Secrets ที่เราเพิ่งวางไป
-        creds_info = st.secrets["gcp_service_account"]
-        
+        json_file = "customerdb.json" 
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        # ใช้ from_json_keyfile_dict แทนการอ่านไฟล์
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name(json_file, scope)
         client = gspread.authorize(creds)
         
         spreadsheet = client.open(file_name)
