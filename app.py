@@ -9,11 +9,17 @@ st.set_page_config(page_title="Account Performance Tracker", layout="wide")
 # --- ฟังก์ชันดึงข้อมูลจากหลายชีตย่อย ---
 def load_multiple_sheets(file_name, start_date, end_date):
     try:
-        json_file = "customerdb.json" 
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_name(json_file, scope)
-        client = gspread.authorize(creds)
         
+        # 🔒 ตรวจสอบว่ามี Secrets หรือไม่ (ถ้ามีแปลว่ารันบน Cloud)
+        if "gcp_service_account" in st.secrets:
+            creds_info = st.secrets["gcp_service_account"]
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+        else:
+            # 🏠 ถ้ารันในเครื่อง ให้ใช้ไฟล์เดิม
+            creds = ServiceAccountCredentials.from_json_keyfile_name("customerdb.json", scope)
+            
+        client = gspread.authorize(creds)
         spreadsheet = client.open(file_name)
         all_data = []
         current = start_date
@@ -26,19 +32,15 @@ def load_multiple_sheets(file_name, start_date, end_date):
                 if len(raw_values) > 1:
                     headers = [h.strip() for h in raw_values[0]]
                     temp_df = pd.DataFrame(raw_values[1:], columns=headers)
-                    
-                    needed_cols = ['Account', 'Valid Amount']
-                    if all(col in temp_df.columns for col in needed_cols):
-                        temp_df = temp_df[needed_cols].copy()
+                    if all(col in temp_df.columns for col in ['Account', 'Valid Amount']):
+                        temp_df = temp_df[['Account', 'Valid Amount']].copy()
                         temp_df['DataDate'] = pd.to_datetime(current)
                         all_data.append(temp_df)
-            except gspread.exceptions.WorksheetNotFound:
+            except:
                 pass 
             current += timedelta(days=1)
             
-        if not all_data:
-            return pd.DataFrame(), "ไม่พบข้อมูลในช่วงวันที่ระบุ"
-        return pd.concat(all_data, ignore_index=True), None
+        return (pd.concat(all_data, ignore_index=True), None) if all_data else (pd.DataFrame(), "ไม่พบข้อมูล")
     except Exception as e:
         return None, str(e)
 
