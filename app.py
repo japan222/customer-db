@@ -3,27 +3,37 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
+import os  # <--- เพิ่มบรรทัดนี้เข้าไปครับ!
 
 st.set_page_config(page_title="Account Performance Tracker", layout="wide")
 
-# --- ฟังก์ชันดึงข้อมูลจากหลายชีตย่อย ---
 def load_multiple_sheets(file_name, start_date, end_date):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        
-        # 🔒 ตรวจสอบว่ามี Secrets หรือไม่ (ถ้ามีแปลว่ารันบน Cloud)
-        if "gcp_service_account" in st.secrets:
-            creds_info = st.secrets["gcp_service_account"]
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-        else:
-            # 🏠 ถ้ารันในเครื่อง ให้ใช้ไฟล์เดิม
-            creds = ServiceAccountCredentials.from_json_keyfile_name("customerdb.json", scope)
-            
+        creds = None
+
+        # 1. พยายามหา Secrets ก่อน (ใช้ try เพื่อไม่ให้ระบบแจ้งเตือนถ้าไม่มี)
+        try:
+            if "gcp_service_account" in st.secrets:
+                creds_info = st.secrets["gcp_service_account"]
+                creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+        except:
+            # ถ้าไม่มี secrets (รันในเครื่อง) ให้ข้ามไป ไม่ต้องทำอะไร
+            pass
+
+        # 2. ถ้าข้อ 1 ไม่สำเร็จ (แปลว่ารันในเครื่อง) ให้ใช้ไฟล์ JSON
+        if creds is None:
+            if os.path.exists("customerdb.json"):
+                creds = ServiceAccountCredentials.from_json_keyfile_name("customerdb.json", scope)
+            else:
+                return None, "❌ ไม่พบกุญแจเชื่อมต่อ (ไฟล์ JSON หาย!)"
+
         client = gspread.authorize(creds)
+        
+        # --- ส่วนดึงข้อมูล (เหมือนเดิมที่คุณมี) ---
         spreadsheet = client.open(file_name)
         all_data = []
         current = start_date
-        
         while current <= end_date:
             day_name = str(current.day)
             try:
