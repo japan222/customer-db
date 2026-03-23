@@ -82,7 +82,7 @@ with tab1:
 
     # ✅ ย้าย block นี้เข้ามาอยู่ข้างใน tab1 ให้ถูกต้อง (ย่อหน้าให้ตรงกัน)
     if submit_streak:
-        with st.spinner('กำลังประมวลผลและคัดกรองรายการต่อเนื่อง...'):
+        with st.spinner('กำลังประมวลผล...'):
             raw_list, err = fetch_raw_data_range(selected_store, s_date_s, e_date_s)
             
             if err: 
@@ -266,7 +266,7 @@ with tab2:
                     vip_start = st.date_input("📅 จากวันที่:", value=start_7days_fixed, key="v_start")
                 with v_col2:
                     vip_end = st.date_input("📅 ถึงวันที่:", value=yesterday_fixed, key="v_end")
-                vip_submit = st.form_submit_button("🔍 ค้นหาอันดับ VIP", use_container_width=True)
+                vip_submit = st.form_submit_button("ค้นหาอันดับ VIP", use_container_width=True)
 
             with st.spinner('กำลังโหลดอันดับ VIP...'):
                 vip_list, err_v = fetch_raw_data_range(f"{selected_store} customer", vip_start, vip_end)
