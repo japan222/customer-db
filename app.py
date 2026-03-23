@@ -25,7 +25,7 @@ def get_gspread_client():
     except Exception as e: return None, str(e)
 
 # --- ฟังก์ชันดึงข้อมูลดิบรายวัน (ปรับปรุงให้ยืดหยุ่นขึ้น) ---
-@st.cache_data(ttl=600) # เก็บความจำไว้ 600 วินาที (10 นาที)
+@st.cache_data(show_spinner=False, ttl=600) 
 def fetch_raw_data_range(file_name, start_date, end_date):
     client, err = get_gspread_client()
     if err: return None, err
