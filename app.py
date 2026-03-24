@@ -56,8 +56,8 @@ def fetch_raw_data_range(file_name, start_date, end_date):
 st.write("## 📋 ระบบจัดการข้อมูลร้านค้า")
 selected_store = st.selectbox("📂 เลือกร้านค้า:", options=["ADN", "APB", "JYX", "JDX"])
 
-yesterday = datetime.now().date() - timedelta(days=1)
-today = datetime.now().date()
+yesterday = datetime.now().date() - timedelta(days=2)
+today = datetime.now().date() - timedelta(days=1)
 
 # ประกาศตัวแปร Global
 combined_cust_data = None
