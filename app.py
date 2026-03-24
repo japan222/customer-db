@@ -231,14 +231,15 @@ with tab2:
                 success_users = last_streak_df[last_streak_df['streak'] >= target]['username'].unique()
                 
                 if len(success_users) > 0:
-                    st.success(f"พบลูกค้าที่ไม่ฝาก ต่อเนื่องกัน {target} วัน ทั้งหมด {len(success_users)} ราย")
-                    # ✅ บรรทัดที่เพิ่มเข้ามา: สร้าง res_display เพื่อแก้ NameError
-                    res_display = last_streak_df[last_streak_df['username'].isin(success_users)]
+                    st.success(f"พบลูกค้าที่ไม่ฝาก ต่อต่อเนื่องกัน {target} วัน ทั้งหมด {len(success_users)} ราย")
+                    res_display = last_streak_df[last_streak_df['username'].isin(success_users)].sort_values(by='streak', ascending=False)
+                    
                     st.dataframe(res_display[['username', 'ชื่อ', 'เบอร์โทร', 'streak']], 
                                  column_config={"streak": "ไม่ฝากต่อเนื่อง (วัน)"},
-                                 hide_index=True, width="stretch")
+                                 hide_index=True, 
+                                 width="stretch")
                 else: 
-                    st.info ("ไม่พบข้อมูลลูกค้าที่ไม่ฝากเงินตามเกณฑ์")
+                    st.info("ไม่พบข้อมูลลูกค้าที่ไม่ฝากเงินตามเกณฑ์")
 
     # --- ส่วนที่ 2.2: ค้นหาลูกค้าที่ฝากต่อเนื่อง ---
     with st.expander("ค้นหาลูกค้าที่ฝากเงินต่อเนื่อง", expanded=True):
@@ -251,27 +252,40 @@ with tab2:
 
         if submit_dep:
             raw_list, err = fetch_raw_data_range(f"{selected_store} customer", s_date_dep, e_date_dep)
-            if err: st.error(err)
+            if err: 
+                st.error(err)
             elif raw_list:
-                combined_cust_data = pd.concat(raw_list, ignore_index=True)
-                df_work = combined_cust_data.copy()
+                df_work = pd.concat(raw_list, ignore_index=True)
                 df_work['ฝากเงิน'] = pd.to_numeric(df_work['ฝากเงิน'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
                 
-                dep_only = df_work[df_work['ฝากเงิน'] > 0].copy().sort_values(['username', 'DataDate'])
-                dep_only['diff'] = dep_only.groupby('username')['DataDate'].diff().dt.days
+                # กรองเฉพาะยอดฝากที่มากกว่า 0 และจัดการวันที่ให้ไม่มีเวลา
+                dep_only = df_work[df_work['ฝากเงิน'] > 0].copy()
+                dep_only['DataDate'] = pd.to_datetime(dep_only['DataDate']).dt.date
+                dep_only = dep_only.sort_values(['username', 'DataDate'])
+                
+                # คำนวณ Streak
+                dep_only['diff'] = dep_only.groupby('username')['DataDate'].diff().apply(lambda x: x.days if pd.notnull(x) else 1)
                 dep_only['grp'] = (dep_only['diff'] != 1).groupby(dep_only['username']).cumsum()
-                dep_only['streak'] = dep_only.groupby(['username', 'grp']).cumcount() + 1
+                dep_only['streak_calc'] = dep_only.groupby(['username', 'grp']).cumcount() + 1
+                
+                # ✅ หัวใจสำคัญ: หาค่า Streak สูงสุดของแต่ละคนในช่วงวันที่เลือก
+                user_max_streak = dep_only.groupby(['username', 'ชื่อ', 'เบอร์โทร'])['streak_calc'].max().reset_index()
+                user_max_streak.columns = ['username', 'ชื่อ', 'เบอร์โทร', 'streak']
                 
                 target = int(streak_dep_in)
-                success = dep_only[dep_only['streak'] >= target]['username'].unique()
+                # กรองเอาเฉพาะคนที่สถิติสูงสุดถึงเกณฑ์ที่กำหนด
+                success_list = user_max_streak[user_max_streak['streak'] >= target]
                 
-                if len(success) > 0:
-                    st.success(f"พบคนฝากเงินต่อเนื่อง {target} วัน ทั้งหมด {len(success)} ราย")
-                    res_display = dep_only[dep_only['username'].isin(success)].groupby('username').last().reset_index()
-                    st.dataframe(res_display[['username', 'ชื่อ', 'เบอร์โทร', 'streak']], 
-                                 column_config={"streak": "ฝากต่อเนื่อง (วัน)"},
-                                 hide_index=True, width="stretch")
-                else: st.info("ไม่พบข้อมูลลูกค้าที่ฝากเงินต่อเนื่องตามเกณฑ์")
+                if not success_list.empty:
+                    st.success(f"พบคนฝากเงินต่อเนื่อง {target} วัน ทั้งหมด {len(success_list)} ราย")
+                    st.dataframe(
+                        success_list.sort_values('streak', ascending=False), 
+                        column_config={"streak": "ฝากต่อเนื่องสูงสุด (วัน)"},
+                        hide_index=True, 
+                        width="stretch"
+                    )
+                else: 
+                    st.info(f"ไม่พบข้อมูลลูกค้าที่ฝากเงินต่อเนื่องตามเกณฑ์")
 
     st.divider()
 
