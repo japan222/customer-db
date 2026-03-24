@@ -78,7 +78,7 @@ with tab1:
         with col2:
             target_days_input = st.text_input("จำนวนวันที่ต้องต่อเนื่อง:", value="2", key="t1_days")
             e_date_s = st.date_input("📅 ถึงวันที่:", value=today, key="t1_end")
-        submit_streak = st.form_submit_button("ค้นหา", use_container_width=True)
+        submit_streak = st.form_submit_button("ค้นหา", width="stretch")
 
     # ✅ ย้าย block นี้เข้ามาอยู่ข้างใน tab1 ให้ถูกต้อง (ย่อหน้าให้ตรงกัน)
     if submit_streak:
@@ -154,7 +154,7 @@ with tab1:
                             st.dataframe(
                                 final_display.style.format({'ยอดเทิร์นรวม': '{:,.2f}'}),
                                 hide_index=True, 
-                                use_container_width=True,
+                                width="stretch",
                                 # ✅ กำหนดลำดับคอลัมน์ที่จะให้ "แสดง" ตอนเริ่มต้น
                                 # คอลัมน์ไหนที่ไม่ใส่ชื่อไว้ในนี้ (เช่น รายละเอียดรายวัน) จะถูกซ่อนไว้โดยอัตโนมัติ
                                 column_order=['Account', 'เบอร์โทรศัพท์', 'ช่วงวันที่ตรวจพบ', 'ยอดเทิร์นรวม']
@@ -184,32 +184,61 @@ with tab2:
             with col_d1: s_date_no = st.date_input("📅 จากวันที่:", value=yesterday, key="t2_no_start")
             with col_d2: e_date_no = st.date_input("📅 ถึงวันที่:", value=today, key="t2_no_end")
             with col_s: streak_no_in = st.text_input("จำนวนวันต่อเนื่องที่ยอดฝากเป็น 0:", value="2", key="t2_no_streak")
-            submit_no_dep = st.form_submit_button("ค้นหาลูกค้าไม่ฝาก", use_container_width=True)
+            submit_no_dep = st.form_submit_button("ค้นหาลูกค้าไม่ฝาก", width="stretch")
 
         if submit_no_dep:
             raw_list, err = fetch_raw_data_range(f"{selected_store} customer", s_date_no, e_date_no)
-            if err: st.error(err)
+            if err: 
+                st.error(err)
             elif raw_list:
-                combined_cust_data = pd.concat(raw_list, ignore_index=True)
-                df_work = combined_cust_data.copy()
+                df_work = pd.concat(raw_list, ignore_index=True)
                 df_work['ฝากเงิน'] = pd.to_numeric(df_work['ฝากเงิน'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+                df_work['DataDate'] = pd.to_datetime(df_work['DataDate'])
+
+                # --- 🚀 ส่วนที่แก้ไข: สร้างตารางวันที่แบบสมบูรณ์เพื่อเติมช่องว่าง (Fill Gaps) ---
+                # 1. สร้างช่วงวันที่ทั้งหมดที่ผู้ใช้เลือกในฟอร์ม
+                all_dates = pd.date_range(start=s_date_no, end=e_date_no)
+                all_users = df_work['username'].unique()
+
+                # 2. สร้างโครงตารางที่มีทุก User และ ทุกวัน (Cartesian Product)
+                template = pd.MultiIndex.from_product([all_users, all_dates], names=['username', 'DataDate']).to_frame(index=False)
+
+                # 3. เอาข้อมูลจริงไป Merge กับโครง (ใครไม่มีข้อมูลวันไหน วันนั้นจะเป็น NaN)
+                df_filled = template.merge(df_work, on=['username', 'DataDate'], how='left')
+
+                # 4. เติมค่าว่าง: ยอดฝากเป็น 0 และเติม ชื่อ/เบอร์โทร จากข้อมูลที่มีอยู่ของ User นั้น
+                df_filled['ฝากเงิน'] = df_filled['ฝากเงิน'].fillna(0)
+                df_filled['ชื่อ'] = df_filled.groupby('username')['ชื่อ'].ffill().bfill()
+                df_filled['เบอร์โทร'] = df_filled.groupby('username')['เบอร์โทร'].ffill().bfill()
+
+                # --- 📊 คำนวณ Streak ของยอดฝากที่เป็น 0 ---
+                df_filled = df_filled.sort_values(['username', 'DataDate'])
                 
-                no_dep_only = df_work[df_work['ฝากเงิน'] == 0].copy().sort_values(['username', 'DataDate'])
-                no_dep_only['diff'] = no_dep_only.groupby('username')['DataDate'].diff().dt.days
-                no_dep_only['grp'] = (no_dep_only['diff'] != 1).groupby(no_dep_only['username']).cumsum()
+                # เช็คว่าวันนั้นยอดฝากเป็น 0 หรือไม่
+                df_filled['is_zero'] = (df_filled['ฝากเงิน'] == 0)
+                
+                # สร้างกลุ่มเพื่อแยกช่วงที่ฝาก (ถ้ามียอดฝาก > 0 ให้เริ่มนับกลุ่มใหม่)
+                df_filled['grp'] = (df_filled['is_zero'] == False).groupby(df_filled['username']).cumsum()
+                
+                # กรองเอาเฉพาะช่วงที่เป็น 0 แล้วนับจำนวนวันต่อเนื่อง
+                no_dep_only = df_filled[df_filled['is_zero']].copy()
                 no_dep_only['streak'] = no_dep_only.groupby(['username', 'grp']).cumcount() + 1
                 
                 target = int(streak_no_in)
-                success = no_dep_only[no_dep_only['streak'] >= target]['username'].unique()
+                # ค้นหา User ที่มี streak ล่าสุด (หรือ ณ วันที่เลือก) ถึงเกณฑ์
+                # เราจะดูที่ค่า streak ของวันล่าสุดที่แต่ละคนมี
+                last_streak_df = no_dep_only.groupby('username').last().reset_index()
+                success_users = last_streak_df[last_streak_df['streak'] >= target]['username'].unique()
                 
-                if len(success) > 0:
-                    st.success(f"พบลูกค้าที่ไม่ฝาก ต่อเนื่องกัน {target} วัน ทั้งหมด {len(success)} ราย")
+                if len(success_users) > 0:
+                    st.success(f"พบลูกค้าที่ไม่ฝาก ต่อเนื่องกัน {target} วัน ทั้งหมด {len(success_users)} ราย")
                     # ✅ บรรทัดที่เพิ่มเข้ามา: สร้าง res_display เพื่อแก้ NameError
-                    res_display = no_dep_only[no_dep_only['username'].isin(success)].groupby('username').last().reset_index()
+                    res_display = last_streak_df[last_streak_df['username'].isin(success_users)]
                     st.dataframe(res_display[['username', 'ชื่อ', 'เบอร์โทร', 'streak']], 
                                  column_config={"streak": "ไม่ฝากต่อเนื่อง (วัน)"},
-                                 hide_index=True, use_container_width=True)
-                else: st.info("ไม่พบข้อมูลลูกค้าที่ไม่ฝากเงินตามเกณฑ์")
+                                 hide_index=True, width="stretch")
+                else: 
+                    st.info ("ไม่พบข้อมูลลูกค้าที่ไม่ฝากเงินตามเกณฑ์")
 
     # --- ส่วนที่ 2.2: ค้นหาลูกค้าที่ฝากต่อเนื่อง ---
     with st.expander("ค้นหาลูกค้าที่ฝากเงินต่อเนื่อง", expanded=True):
@@ -218,7 +247,7 @@ with tab2:
             with col_d1: s_date_dep = st.date_input("📅 จากวันที่:", value=yesterday, key="t2_dep_start")
             with col_d2: e_date_dep = st.date_input("📅 ถึงวันที่:", value=today, key="t2_dep_end")
             with col_s: streak_dep_in = st.text_input("จำนวนวันต่อเนื่องที่มีการฝากเงิน:", value="2", key="t2_dep_streak")
-            submit_dep = st.form_submit_button("ค้นหาลูกค้าฝากต่อเนื่อง", use_container_width=True)
+            submit_dep = st.form_submit_button("ค้นหาลูกค้าฝากต่อเนื่อง", width="stretch")
 
         if submit_dep:
             raw_list, err = fetch_raw_data_range(f"{selected_store} customer", s_date_dep, e_date_dep)
@@ -241,7 +270,7 @@ with tab2:
                     res_display = dep_only[dep_only['username'].isin(success)].groupby('username').last().reset_index()
                     st.dataframe(res_display[['username', 'ชื่อ', 'เบอร์โทร', 'streak']], 
                                  column_config={"streak": "ฝากต่อเนื่อง (วัน)"},
-                                 hide_index=True, use_container_width=True)
+                                 hide_index=True, width="stretch")
                 else: st.info("ไม่พบข้อมูลลูกค้าที่ฝากเงินต่อเนื่องตามเกณฑ์")
 
     st.divider()
@@ -266,7 +295,7 @@ with tab2:
                     vip_start = st.date_input("📅 จากวันที่:", value=start_7days_fixed, key="v_start")
                 with v_col2:
                     vip_end = st.date_input("📅 ถึงวันที่:", value=yesterday_fixed, key="v_end")
-                vip_submit = st.form_submit_button("ค้นหาอันดับ VIP", use_container_width=True)
+                vip_submit = st.form_submit_button("ค้นหาอันดับ VIP", width="stretch")
 
             with st.spinner('กำลังโหลดอันดับ VIP...'):
                 vip_list, err_v = fetch_raw_data_range(f"{selected_store} customer", vip_start, vip_end)
@@ -282,7 +311,7 @@ with tab2:
                     # ✅ เพิ่ม height=725 เพื่อล็อคความสูงตาราง
                     st.dataframe(
                         v_top20.style.format({'ฝากเงิน': '{:,.2f}'}),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                         height=425 
                     )
@@ -311,7 +340,7 @@ with tab2:
                 # ✅ เพิ่ม height=725 ให้เท่ากับตารางฝั่งซ้าย
                 st.dataframe(
                     pl_top20.style.format({'กำไรขาดทุน': '{:,.2f}'}),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                     height=514
                 )
