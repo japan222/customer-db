@@ -111,7 +111,7 @@ with tab1:
                         
                         if not qualifying_days.empty:
                             # 3. ดึงเบอร์โทรศัพท์มา Match
-                            cust_file_name = f"{selected_store} customer"
+                            cust_file_name = f"{selected_store} หน้าม่วง"
                             raw_cust_list, _ = fetch_raw_data_range(cust_file_name, s_date_s, e_date_s)
                             
                             phone_map = pd.DataFrame(columns=['match_key', 'เบอร์โทร'])
@@ -187,7 +187,7 @@ with tab2:
             submit_no_dep = st.form_submit_button("ค้นหาลูกค้าไม่ฝาก", width="stretch")
 
         if submit_no_dep:
-            raw_list, err = fetch_raw_data_range(f"{selected_store} customer", s_date_no, e_date_no)
+            raw_list, err = fetch_raw_data_range(f"{selected_store} หน้าม่วง", s_date_no, e_date_no)
             if err: 
                 st.error(err)
             elif raw_list:
@@ -251,7 +251,7 @@ with tab2:
             submit_dep = st.form_submit_button("ค้นหาลูกค้าฝากต่อเนื่อง", width="stretch")
 
         if submit_dep:
-            raw_list, err = fetch_raw_data_range(f"{selected_store} customer", s_date_dep, e_date_dep)
+            raw_list, err = fetch_raw_data_range(f"{selected_store} หน้าม่วง", s_date_dep, e_date_dep)
             if err: 
                 st.error(err)
             elif raw_list:
@@ -312,7 +312,7 @@ with tab2:
                 vip_submit = st.form_submit_button("ค้นหาอันดับ VIP", width="stretch")
 
             with st.spinner('กำลังโหลดอันดับ VIP...'):
-                vip_list, err_v = fetch_raw_data_range(f"{selected_store} customer", vip_start, vip_end)
+                vip_list, err_v = fetch_raw_data_range(f"{selected_store} หน้าม่วง", vip_start, vip_end)
                 
                 if err_v:
                     st.warning(err_v)
@@ -337,7 +337,7 @@ with tab2:
         with st.expander(f"📈 อันดับกำไร/ขาดทุน (7 วันล่าสุด: วันที่ {start_7days_fixed.day}-{yesterday_fixed.day})", expanded=True):
             pl_mode = st.radio("เลือกโหมด:", ["กำไรสูงสุด", "ขาดทุนสูงสุด"], horizontal=True, key="pl_mode_fixed")
             
-            pl_list, err_pl = fetch_raw_data_range(f"{selected_store} customer", start_7days_fixed, yesterday_fixed)
+            pl_list, err_pl = fetch_raw_data_range(f"{selected_store} หน้าม่วง", start_7days_fixed, yesterday_fixed)
             
             if err_pl:
                 st.warning(err_pl)
